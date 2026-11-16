@@ -369,9 +369,14 @@ async function reviewPanel(s, draft, live) {
   // 체크 상태 공유: 바꿀 때마다 시트('여론체크')에 저장, 열 때·화면으로 돌아올 때 불러옴 → 기기가 달라도 같은 체크
   const day = v => String(v || "").replace("at:", "").slice(0, 10);
   const saved = box.querySelector("#rv-saved");
-  const applyKeys = keys => {
-    const on = new Set(keys);
-    boxes().forEach(b => b.checked = on.has(b.dataset.k));
+  // 주의 신호는 항상 빼 두고, CS 불만 자동 해제(2026-11-16 도입) 이전에 저장된 체크면 CS 불만도 뺌
+  const RULE_AT = new Date("2026-11-16T09:00:00Z");
+  const applyKeys = (keys, at) => {
+    const on = new Set(keys), old = !at || new Date(at) < RULE_AT;
+    boxes().forEach(b => {
+      const k = b.dataset.k, sec = k.split(":")[0];
+      b.checked = on.has(k) && sec !== "warns" && !(old && b.closest(".rv-it")?.querySelector(".rv-off"));
+    });
     syncAll(); count();
   };
   let saveT = 0, dirtyAt = 0, serverOK = false;   // 조회기록 Apps Script 가 체크 저장을 지원할 때만 저장
@@ -397,7 +402,7 @@ async function reviewPanel(s, draft, live) {
       // 이 초안에 대한 '저장된 체크'와 '마지막 최종 연동' 중 더 최근 것을 보여 줌 (저장된 체크가 없으면 연동한 항목)
       const sameDraft = x => x && Array.isArray(x.keys) && day(x.draftAt) === day(draft.at) && (x !== y || x.keys.length);
       const pick = [c, y].filter(sameDraft).sort((a, b2) => new Date(b2.at) - new Date(a.at))[0];
-      if (pick) applyKeys(pick.keys);
+      if (pick) applyKeys(pick.keys, pick.at);
     } catch (e) {}
   }
   await loadChecks();
