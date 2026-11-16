@@ -866,16 +866,26 @@ async function reviewPanel(s, draft, live) {
 }
 
 var started = false;
-async function showDrafts() {
+async function showDrafts() {   // 검토 대기 목록: 최종 연동이 셀러 캘린더까지 끝난 셀러는 뺌
   try {
-    const r = await fetch(new URL("drafts/index.json?t=" + Date.now(), location.href).href, {cache: "no-store"});
-    const list = r.ok ? await r.json() : [];
+    const nc = u => fetch(u + (u.includes("?") ? "&" : "?") + "t=" + Date.now(), {cache: "no-store"}).then(r => r.ok ? r.json() : null).catch(() => null);
+    const list = (await nc(new URL("drafts/index.json", location.href).href)) || [];
+    const day = v => String(v || "").replace("at:", "").slice(0, 10);
+    const done = async repo => {
+      if (!window.LOG_URL_ADM) return false;
+      const [draft, sync, live] = await Promise.all([nc(new URL(`drafts/${repo}/opinion.json`, location.href).href),
+        nc(`${window.LOG_URL_ADM}?action=opinion_sync&repo=${encodeURIComponent(repo)}`), nc(`/${repo}/opinion.json`)]);
+      return !!(draft && sync && live && sync.keys && sync.keys.length && day(sync.draftAt) === day(draft.at) && String(live._synced) === String(sync.syncedAt));
+    };
     const ss = list.map(repo => SELLERS.find(s => s.repo === repo)).filter(Boolean);
-    if (!ss.length) return;
-    $("#drafts").innerHTML = `<b>검토 대기 댓글 여론 ${ss.length}</b><span>셀러 캘린더에는 아직 적용되지 않았어요. 눌러서 확인하세요.</span><div class="adm-draft-links">${ss.map(s => `<a class="chip" href="?s=${s.repo}#opinion" style="--c:${s.c};text-decoration:none;color:inherit"><i></i>${esc(s.name)} →</a>`).join("")}</div>`;
+    const flags = await Promise.all(ss.map(s => done(s.repo)));
+    const wait = ss.filter((s, i) => !flags[i]);
+    if (!wait.length) { $("#drafts").hidden = true; return; }
+    $("#drafts").innerHTML = `<b>검토 대기 댓글 여론 ${wait.length}</b><span>셀러 캘린더에는 아직 적용되지 않았어요. 눌러서 확인하세요.</span><div class="adm-draft-links">${wait.map(s => `<a class="chip" href="?s=${s.repo}#opinion" style="--c:${s.c};text-decoration:none;color:inherit"><i></i>${esc(s.name)} →</a>`).join("")}</div>`;
     $("#drafts").hidden = false;
   } catch (e) {}
 }
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && started) showDrafts(); });
 function start() {
 if (started) return; started = true;
 showDrafts();
@@ -1111,8 +1121,8 @@ window.__admin = {SELLERS, loadSeller, unlock, route};
 
 <script>
 // 항상 최신 화면: 서버 버전과 다르면(옛 화면이 남아 있으면) 저장해 둔 것을 지우고 새로 불러옴
-const APPVER = "2470c7d02d";
-if ("serviceWorker" in navigator) navigator.serviceWorker.register(new URL("sw.js?v=2470c7d02d", location.href).href).catch(() => {});
+const APPVER = "63c3657bc7";
+if ("serviceWorker" in navigator) navigator.serviceWorker.register(new URL("sw.js?v=63c3657bc7", location.href).href).catch(() => {});
 async function checkVer() {
   try {
     const v = (await (await fetch(new URL("version.txt?t=" + Date.now(), location.href).href, {cache: "no-store"})).text()).trim();
