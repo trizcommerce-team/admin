@@ -753,7 +753,7 @@ async function loadSeller(s) {
   ui.innerHTML = fill(window.ADM_TBODY);
   // 맨 위 띠: admin 계정으로 보는 셀러 캘린더임을 표시 + 전체 보기로 / 다른 셀러로
   const bar = document.createElement("div"); bar.className = "adm-bar";
-  bar.innerHTML = `<a href="${new URL("./", location.href).href}">← 전체</a><span class="adm-tag">ADMIN</span><span class="adm-lbl">관리자 계정으로 보는 셀러 캘린더</span><select aria-label="셀러 바꾸기">${SELLERS.map(x => `<option value="${x.repo}"${x.repo === s.repo ? " selected" : ""}>${x.team} · ${esc(x.name)}</option>`).join("")}</select>`;
+  bar.innerHTML = `<a href="${new URL("./", location.href).href}">← 전체</a><span class="adm-tag">ADMIN</span><span class="adm-lbl" title="관리자 계정으로 보는 셀러 캘린더">관리자로 보는 중</span><select aria-label="셀러 바꾸기">${SELLERS.map(x => `<option value="${x.repo}"${x.repo === s.repo ? " selected" : ""}>${x.team} · ${esc(x.name)}</option>`).join("")}</select>`;
   bar.querySelector("select").onchange = ev => { location.href = new URL("./?s=" + ev.target.value, location.href.split("?")[0]).href; };
   const appEl = ui.querySelector(".app"); if (appEl) appEl.prepend(bar); else document.body.appendChild(bar);   // 화면 맨 위에 'admin 보기' 띠
   const sc = document.createElement("script"); sc.textContent = fill(window.ADM_TJS); document.body.appendChild(sc);
@@ -1123,8 +1123,8 @@ window.__admin = {SELLERS, loadSeller, unlock, route};
 
 <script>
 // 항상 최신 화면: 서버 버전과 다르면(옛 화면이 남아 있으면) 저장해 둔 것을 지우고 새로 불러옴
-const APPVER = "3de2bb6bf4";
-if ("serviceWorker" in navigator) navigator.serviceWorker.register(new URL("sw.js?v=3de2bb6bf4", location.href).href).catch(() => {});
+const APPVER = "d4b4e35ab7";
+if ("serviceWorker" in navigator) navigator.serviceWorker.register(new URL("sw.js?v=d4b4e35ab7", location.href).href).catch(() => {});
 async function checkVer() {
   try {
     const v = (await (await fetch(new URL("version.txt?t=" + Date.now(), location.href).href, {cache: "no-store"})).text()).trim();
