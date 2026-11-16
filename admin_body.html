@@ -17,6 +17,7 @@
 .rv-it{display:flex;gap:6px;align-items:flex-start;font-size:12.5px;line-height:1.45;color:#3a2a14}
 .rv-it input,.rv-all input{width:17px;height:17px;flex:none;margin-top:1px;accent-color:var(--accent)}
 .rv-same{color:#9a8a76;font-size:11px}
+.rv-off{color:#b0603a;font-size:11px;font-weight:500}
 .rv-go{display:block;width:100%;margin-top:10px;padding:12px;border-radius:12px;background:var(--accent);color:var(--accent-ink);font-weight:700;font-size:15px}
 .rv-saved{color:#2f7d4a;font-weight:600;margin-left:2px}
 .rv-status{margin:6px 0 0;font-size:12.5px;color:#6b5434;min-height:16px}
@@ -319,6 +320,25 @@ function itemLabel(sec, it) {
   if (sec === "mood") return `${it.k} ${it.v}% · ${it.ex || ""}`;
   return [it.t || it.k || "", it.d || it.r || it.ex || ""].filter(Boolean).join(" — ");
 }
+// 커머스 CS 불만(배송·품절·선착순·결제/접속 오류·마감 연장·환불/교환·재고·링크·가격) 항목은 셀러 캘린더에 기본으로 안 보냄
+const CS_RE = [
+  /(배송|택배|발송|출고)[^.,!?·]{0,12}(지연|늦|안 ?와|안 ?오|못 ?받|누락|파손|깨져|깨짐|터져|녹아|분실|문의|언제 와|언제 오)/,
+  /녹아서|녹은 채|오배송|배송 ?누락|배송 ?지연|택배 ?분실|파손/,
+  /품절|재고/,
+  /선착순[^.,!?]{0,15}(놓|실패|못|마감|아쉽|불만|끝)|놓쳤|놓침|마감 ?놓/,
+  /(결제|접속|주문|구매|사이트|앱)[^.,!?]{0,8}(오류|에러|튕|실패|불가|안 ?돼|안 ?되|막혀|먹통|접속 ?안)|구매 ?불가/,
+  /(마감|공구)[^.,!?]{0,10}(연장|재오픈|다시 열)|재오픈|연장해/,
+  /환불|교환|반품/,
+  /CS|운영 문의/,
+  /링크[^.,!?]{0,8}(안 ?열|오류|문의|어디|없|요청|안 ?돼|안 ?보|달아)/,
+  /(가격|할인)[^.,!?]{0,12}(불만|비싸|속상|차이|아쉽)|너무 비싸|비싸요|비싸서|비싸다는|더 할인돼|가격 ?불만/
+];
+const CS_SKIP = new Set(["posts", "mood"]);   // 게시물 요약·댓글 분위기 비율은 여러 이야기가 섞여 있어 자동으로 빼지 않음
+function isCS(sec, it) {
+  if (CS_SKIP.has(sec)) return false;
+  const txt = typeof it === "string" ? it : [it.t, it.k, it.d, it.r, it.ex].filter(Boolean).join(" ");
+  return CS_RE.some(re => re.test(txt));
+}
 async function reviewPanel(s, draft, live) {
   const same = (sec, it) => Array.isArray(live && live[sec]) && live[sec].some(x => JSON.stringify(x) === JSON.stringify(it));
   const secs = Object.entries(draft).filter(([k, v]) => (Array.isArray(v) && v.length) || (v && typeof v === "object" && !Array.isArray(v) && Object.keys(v).length));
@@ -327,10 +347,10 @@ async function reviewPanel(s, draft, live) {
   box.innerHTML = `<b>검토 대기 중인 새 댓글 여론이에요</b>
     <span>${esc(draft.from || "")}~${esc(draft.to || "")} · ${esc(draft.at || "")} 정리. 아래 화면은 새 내용 전체예요. 셀러 캘린더에는 아직 적용되지 않았어요 (지금 셀러 화면: ${esc(liveAt)}).</span>
     <details class="rv"><summary>셀러 캘린더에 보낼 항목 고르기 <em id="rv-count"></em></summary>
-      <p class="rv-help">체크한 항목만 셀러 캘린더에 들어가요. 체크를 다 뺀 항목·묶음은 셀러 화면에서 빠져요. 체크는 바로 저장돼서 다른 기기에서 열어도 똑같이 보여요. <small class="rv-saved" id="rv-saved"></small></p>
+      <p class="rv-help">체크한 항목만 셀러 캘린더에 들어가요. 체크를 다 뺀 항목·묶음은 셀러 화면에서 빠져요. 처음에는 <b>주의 신호</b> 항목 전체와 <b>커머스 CS 불만</b>(배송 지연·파손, 품절, 선착순 놓침, 결제·접속 오류, 마감 연장 요청, 환불·교환, 재고, 링크 문의, 가격 불만 등)으로 보이는 항목은 체크가 빠진 채로 열려요. 필요하면 다시 체크해 주세요. 체크는 바로 저장돼서 다른 기기에서 열어도 똑같이 보이고, 저장된 체크가 있으면 그대로 불러와요. <small class="rv-saved" id="rv-saved"></small></p>
       ${secs.map(([sec, v]) => Array.isArray(v)
-        ? `<div class="rv-sec"><label class="rv-all"><input type="checkbox" data-all="${sec}" checked> <b>${esc(SEC_LABEL[sec] || sec)}</b> <small>${v.length}개</small></label>
-            <div class="rv-items">${v.map((it, i) => `<label class="rv-it"><input type="checkbox" data-k="${sec}:${i}" checked><span>${esc(itemLabel(sec, it).slice(0, 160))}${same(sec, it) ? ` <small class="rv-same">지금과 같음</small>` : ""}</span></label>`).join("")}</div></div>`
+        ? `<div class="rv-sec"><label class="rv-all"><input type="checkbox" data-all="${sec}"> <b>${esc(SEC_LABEL[sec] || sec)}</b> <small>${v.length}개</small>${sec === "warns" ? ` <small class="rv-off">주의 신호는 기본으로 빼 둬요</small>` : ""}</label>
+            <div class="rv-items">${v.map((it, i) => { const cs = sec !== "warns" && isCS(sec, it); return `<label class="rv-it"><input type="checkbox" data-k="${sec}:${i}"${sec === "warns" || cs ? "" : " checked"}><span>${esc(itemLabel(sec, it).slice(0, 160))}${same(sec, it) ? ` <small class="rv-same">지금과 같음</small>` : ""}${cs ? ` <small class="rv-off">커머스 CS 불만이라 자동으로 뺐어요</small>` : ""}</span></label>`; }).join("")}</div></div>`
         : `<div class="rv-sec"><label class="rv-all"><input type="checkbox" data-k="${sec}" checked> <b>${esc(SEC_LABEL[sec] || sec)}</b> <small>묶음 1개</small></label></div>`).join("")}
     </details>
     <button type="button" class="rv-go" id="rv-go">최종 연동</button>
@@ -338,17 +358,21 @@ async function reviewPanel(s, draft, live) {
   const op = document.querySelector("#sellerUI #op-scroll"); if (op) op.parentNode.insertBefore(box, op);
   const boxes = () => [...box.querySelectorAll("input[data-k]")];
   const count = () => { const on = boxes().filter(b => b.checked).length; box.querySelector("#rv-count").textContent = `${on}/${boxes().length}개 체크`; };
-  box.querySelectorAll("input[data-all]").forEach(a => a.onchange = () => { box.querySelectorAll(`input[data-k^="${a.dataset.all}:"]`).forEach(b => b.checked = a.checked); count(); });
-  box.addEventListener("change", ev => { const k = ev.target.dataset.k; if (k && k.includes(":")) { const sec = k.split(":")[0]; const all = box.querySelector(`input[data-all="${sec}"]`); const its = [...box.querySelectorAll(`input[data-k^="${sec}:"]`)]; if (all) all.checked = its.some(b => b.checked); } count(); saveChecks(); });
-  count();
+  // 묶음 체크(전체): 하위가 모두 체크면 체크, 일부만이면 '일부'(—) 표시, 하나도 없으면 빈칸
+  const syncAll = () => box.querySelectorAll("input[data-all]").forEach(a => {
+    const its = [...box.querySelectorAll(`input[data-k^="${a.dataset.all}:"]`)], on = its.filter(b => b.checked).length;
+    a.checked = its.length > 0 && on === its.length; a.indeterminate = on > 0 && on < its.length;
+  });
+  box.querySelectorAll("input[data-all]").forEach(a => a.onchange = () => { box.querySelectorAll(`input[data-k^="${a.dataset.all}:"]`).forEach(b => b.checked = a.checked); a.indeterminate = false; count(); });
+  box.addEventListener("change", ev => { const k = ev.target.dataset.k; if (k && k.includes(":")) syncAll(); count(); saveChecks(); });
+  syncAll(); count();
   // 체크 상태 공유: 바꿀 때마다 시트('여론체크')에 저장, 열 때·화면으로 돌아올 때 불러옴 → 기기가 달라도 같은 체크
   const day = v => String(v || "").replace("at:", "").slice(0, 10);
   const saved = box.querySelector("#rv-saved");
   const applyKeys = keys => {
     const on = new Set(keys);
     boxes().forEach(b => b.checked = on.has(b.dataset.k));
-    box.querySelectorAll("input[data-all]").forEach(a => a.checked = boxes().some(b => b.dataset.k.startsWith(a.dataset.all + ":") && b.checked));
-    count();
+    syncAll(); count();
   };
   let saveT = 0, dirtyAt = 0, serverOK = false;   // 조회기록 Apps Script 가 체크 저장을 지원할 때만 저장
   function saveChecks() {
