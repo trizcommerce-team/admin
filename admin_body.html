@@ -314,9 +314,10 @@ async function loadSeller(s) {
 // ---- 댓글 여론 검토: 항목마다 체크 → '최종 연동'을 누르면 체크한 것만 셀러 캘린더에 반영 ----
 const SEC_LABEL = {headline: "한눈에 보기", mood: "댓글 분위기", loves: "팔로워가 좋아하는 것", asks: "자주 묻는 질문", wants: "바라는 것",
   warns: "주의할 점", kinds: "반응 좋은 콘텐츠", who: "어떤 팔로워인지", flavors: "인기 맛", ideas: "콘텐츠 아이디어",
-  posts: "게시물별 요약", changes: "지난달 대비 달라진 여론", iq: "답을 기다리는 질문·소통"};
+  posts: "게시물별 요약", changes: "지난 기간 대비 달라진 여론", iq: "답을 기다리는 질문·소통"};
 function itemLabel(sec, it) {
   if (typeof it === "string") return it;
+  if (it && it.lbl) return it.lbl;
   if (sec === "posts") return `${it.d || ""} ${it.t || ""} — ${it.s || ""}`;
   if (sec === "mood") return `${it.k} ${it.v}% · ${it.ex || ""}`;
   return [it.t || it.k || "", it.d || it.r || it.ex || ""].filter(Boolean).join(" — ");
@@ -339,7 +340,7 @@ const CS_RE = [
 const CS_SKIP = new Set(["posts", "mood"]);   // 게시물 요약·댓글 분위기 비율은 여러 이야기가 섞여 있어 자동으로 빼지 않음
 function isCS(sec, it) {
   if (CS_SKIP.has(sec)) return false;
-  const txt = typeof it === "string" ? it : [it.t, it.k, it.d, it.r, it.ex].filter(Boolean).join(" ");
+  const txt = typeof it === "string" ? it : [it.t, it.k, it.d, it.r, it.ex, it.q].filter(Boolean).join(" ");
   return CS_RE.some(re => re.test(txt));
 }
 async function reviewPanel(s, draft, live) {
@@ -351,18 +352,48 @@ async function reviewPanel(s, draft, live) {
     return (toD - d) / 864e5 > 30;
   };
   const same = (sec, it) => Array.isArray(live && live[sec]) && live[sec].some(x => JSON.stringify(x) === JSON.stringify(it));
-  const secs = Object.entries(draft).filter(([k, v]) => (Array.isArray(v) && v.length) || (v && typeof v === "object" && !Array.isArray(v) && Object.keys(v).length));
+  // 체크 목록 = 셀러 캘린더 '댓글 여론' 탭과 같은 묶음·같은 순서. 묶음(객체)인 '달라진 여론'·'답글 소통'·'답을 기다리는 질문'도 낱개로 풀어서 하나씩 체크
+  // 키: headline:0 (목록 항목), changes:new:0 / changes:deeper:1, iq:mood, iq:replies, iq:questions, iq:ex:3, flavors(묶음 통째)
+  const pc = (a, b) => b ? Math.round(a / b * 100) : 0;
+  const G = {}, add = (g, label, x) => { (G[g] = G[g] || {g, label, items: []}).items.push(x); };
+  const GL = {changes: "🆕 지난 기간 대비 달라진 여론", headline: "한눈에 보기", mood: "댓글 분위기", "iq-reply": "💬 답글 소통", "iq-q": "🙋 답을 기다리는 질문",
+    warns: "⚠️ 주의 신호", loves: "❤️ 팔로워가 좋아하는 점", asks: "❓ 자주 묻는 질문", wants: "🙋 팔로워 요청", kinds: "📊 콘텐츠 유형별 반응",
+    who: "👥 어떤 팔로워인가요", ideas: "💡 일상 콘텐츠 힌트", posts: "🗂 게시물별 댓글 요약"};
+  const ORDER = ["changes", "headline", "mood", "iq-reply", "iq-q", "warns", "loves", "asks", "wants", "kinds", "who", "flavors", "ideas", "posts"];
+  const IQd = draft.iq && typeof draft.iq === "object" ? draft.iq : null;
+  if (IQd && IQd.mood && IQd.counted) add("mood", GL.mood, {k: "iq:mood", lbl: `분위기 비율을 전체 댓글로 계산 — 팔로워 댓글 ${IQd.counted.toLocaleString()}개 기준${IQd.entries ? ` (이벤트 응모 ${IQd.entries.toLocaleString()}개 따로)` : ""}`});
+  Object.entries(draft).forEach(([sec, v]) => {
+    if (Array.isArray(v)) v.forEach((it, i) => add(sec, GL[sec] || SEC_LABEL[sec] || sec, {k: `${sec}:${i}`, sec, it, arr: true}));
+    else if (sec === "changes" && v) {
+      (v.new || []).forEach((x, i) => add(sec, GL.changes, {k: `changes:new:${i}`, sec, it: x, lbl: `NEW · ${x.t || ""} — ${x.d || ""}`}));
+      (v.deeper || []).forEach((x, i) => add(sec, GL.changes, {k: `changes:deeper:${i}`, sec, it: x, lbl: `심화 · ${x.t || ""} — ${x.d || ""}`}));
+    } else if (sec === "iq" && v) {
+      if (v.replies) { const r = v.replies; add("iq-reply", GL["iq-reply"], {k: "iq:replies", lbl: `셀러 답글 ${r.seller}개 · 답글 받은 팔로워 ${pc(r.got, r.users)}% · 같은 문구 답글 ${pc(r.template, r.seller)}%`}); }
+      const Q = v.questions || {};
+      if (Q.total != null) add("iq-q", GL["iq-q"], {k: "iq:questions", lbl: `안내 문장 — 팔로워 질문 ${Q.total}개 중 ${Q.unanswered}개(${pc(Q.unanswered, Q.total)}%)에 답글이 달리지 않았어요`});
+      // 셀러 화면과 같은 순서: 비슷한 질문 수 → 좋아요 수 → 최근 날짜 → 원래 순서 (키는 원래 번호 iq:ex:i 그대로)
+      const bi = s => { const k = String(s || "").replace(/[^가-힣a-zA-Z0-9]/g, ""), b = new Set(); for (let i = 0; i < k.length - 1; i++) b.add(k.slice(i, i + 2)); return b; };
+      const alike = (a, b) => { const m = Math.min(a.size, b.size); if (m < 4) return false; let n = 0; a.forEach(x => { if (b.has(x)) n++; }); return n / m >= 0.6; };
+      const dnum = s => { const m = String(s || "").match(/(\d{1,2})\/(\d{1,2})/); return m ? +m[1] * 100 + +m[2] : 0; };
+      const qs = (Q.examples || []).map((e, i) => ({e, i, b: bi(e.q)}));
+      qs.forEach(x => { x.dup = +x.e.n || +x.e.cnt || 1 + qs.filter(y => y !== x && alike(x.b, y.b)).length; x.lk = +x.e.likes || +x.e.lk || 0; x.dn = dnum(x.e.d); });
+      qs.sort((a, b) => b.dup - a.dup || b.lk - a.lk || b.dn - a.dn || a.i - b.i);
+      qs.forEach(({e, i, dup}) => add("iq-q", GL["iq-q"], {k: `iq:ex:${i}`, sec: "iq", it: e, lbl: `${e.q || ""}${dup >= 2 ? ` (비슷한 질문 ${dup}개)` : ""} · ${e.d || ""}`}));
+    } else if (v && typeof v === "object" && Object.keys(v).length) G[sec] = {g: sec, label: sec === "flavors" ? `${v.icon || "📊"} ${v.h || "인기 맛"}` : (SEC_LABEL[sec] || sec), bundle: sec};
+  });
+  const groups = [...ORDER.filter(g => G[g]), ...Object.keys(G).filter(g => !ORDER.includes(g))].map(g => G[g]);
   const liveAt = live && live.at ? `${live.at} 정리본` : "아직 없음";
   const box = document.createElement("div"); box.className = "adm-draft adm-review";
   box.innerHTML = `<b>검토 대기 중인 새 댓글 여론이에요</b>
     <span>${esc(draft.from || "")}~${esc(draft.to || "")} · ${esc(draft.at || "")} 정리. 아래 화면은 새 내용 전체예요. 셀러 캘린더에는 아직 적용되지 않았어요 (지금 셀러 화면: ${esc(liveAt)}).</span>
     <details class="rv"><summary>셀러 캘린더에 보낼 항목 고르기 <em id="rv-count"></em></summary>
       <p class="rv-help">체크한 항목만 셀러 캘린더에 들어가요. 체크를 다 뺀 항목·묶음은 셀러 화면에서 빠져요. 처음에는 <b>주의 신호</b> 항목 전체, <b>30일 지난 게시물 요약</b>, 그리고 <b>커머스 CS 불만</b>(배송 지연·파손, 품절, 선착순 놓침, 결제·접속 오류, 마감 연장 요청, 환불·교환, 재고, 링크 문의, 가격 불만, '점점 상업적으로 변해 아쉽다' 같은 상업화 불만 등)으로 보이는 항목은 체크가 빠진 채로 열려요. 필요하면 다시 체크해 주세요. 체크는 바로 저장돼서 다른 기기에서 열어도 똑같이 보이고, 저장된 체크가 있으면 그대로 불러와요. <small class="rv-saved" id="rv-saved"></small></p>
-      ${secs.map(([sec, v]) => Array.isArray(v)
-        ? `<div class="rv-sec"><label class="rv-all"><input type="checkbox" data-all="${sec}"> <b>${esc(SEC_LABEL[sec] || sec)}</b> <small>${v.length}개</small>${sec === "warns" ? ` <small class="rv-off">주의 신호는 기본으로 빼 둬요</small>` : ""}</label>
-            ${sec === "posts" ? `<button type="button" class="rv-30" id="rv-30">최근 30일만 선택하기</button>` : ""}
-            <div class="rv-items">${v.map((it, i) => { const cs = sec !== "warns" && isCS(sec, it), old = sec === "posts" && isOldPost(it); return `<label class="rv-it"><input type="checkbox" data-k="${sec}:${i}"${sec === "warns" || cs || old ? "" : " checked"}><span>${esc(itemLabel(sec, it).slice(0, 160))}${same(sec, it) ? ` <small class="rv-same">지금과 같음</small>` : ""}${cs ? ` <small class="rv-off">커머스 CS 불만이라 자동으로 뺐어요</small>` : ""}${old ? ` <small class="rv-off rv-old">30일 지난 게시물</small>` : ""}</span></label>`; }).join("")}</div></div>`
-        : `<div class="rv-sec"><label class="rv-all"><input type="checkbox" data-k="${sec}" checked> <b>${esc(SEC_LABEL[sec] || sec)}</b> <small>묶음 1개</small></label></div>`).join("")}
+      ${groups.map(gr => gr.bundle
+        ? `<div class="rv-sec"><label class="rv-all"><input type="checkbox" data-k="${gr.bundle}" checked> <b>${esc(gr.label)}</b> <small>묶음 1개</small></label></div>`
+        : `<div class="rv-sec"><label class="rv-all"><input type="checkbox" data-all="${gr.g}"> <b>${esc(gr.label)}</b> <small>${gr.items.length}개</small>${gr.g === "warns" ? ` <small class="rv-off">주의 신호는 기본으로 빼 둬요</small>` : ""}</label>
+            ${gr.g === "posts" ? `<button type="button" class="rv-30" id="rv-30">최근 30일만 선택하기</button>` : ""}
+            <div class="rv-items">${gr.items.map(x => { const sec = x.sec || "", it = x.it, cs = !!it && sec !== "warns" && isCS(sec, it), old = sec === "posts" && isOldPost(it);
+              return `<label class="rv-it"><input type="checkbox" data-g="${gr.g}" data-k="${x.k}"${sec === "warns" || cs || old ? "" : " checked"}><span>${esc((x.lbl || itemLabel(sec, it)).slice(0, 160))}${x.arr && same(sec, it) ? ` <small class="rv-same">지금과 같음</small>` : ""}${cs ? ` <small class="rv-off">커머스 CS 불만이라 자동으로 뺐어요</small>` : ""}${old ? ` <small class="rv-off rv-old">30일 지난 게시물</small>` : ""}</span></label>`; }).join("")}</div></div>`).join("")}
     </details>
     <button type="button" class="rv-go" id="rv-go">최종 연동</button>
     <p class="rv-status" id="rv-status"></p>`;
@@ -371,11 +402,11 @@ async function reviewPanel(s, draft, live) {
   const count = () => { const on = boxes().filter(b => b.checked).length; box.querySelector("#rv-count").textContent = `${on}/${boxes().length}개 체크`; };
   // 묶음 체크(전체): 하위가 모두 체크면 체크, 일부만이면 '일부'(—) 표시, 하나도 없으면 빈칸
   const syncAll = () => box.querySelectorAll("input[data-all]").forEach(a => {
-    const its = [...box.querySelectorAll(`input[data-k^="${a.dataset.all}:"]`)], on = its.filter(b => b.checked).length;
+    const its = [...box.querySelectorAll(`input[data-g="${a.dataset.all}"]`)], on = its.filter(b => b.checked).length;
     a.checked = its.length > 0 && on === its.length; a.indeterminate = on > 0 && on < its.length;
   });
-  box.querySelectorAll("input[data-all]").forEach(a => a.onchange = () => { box.querySelectorAll(`input[data-k^="${a.dataset.all}:"]`).forEach(b => b.checked = a.checked); a.indeterminate = false; count(); });
-  box.addEventListener("change", ev => { const k = ev.target.dataset.k; if (k && k.includes(":")) syncAll(); count(); saveChecks(); });
+  box.querySelectorAll("input[data-all]").forEach(a => a.onchange = () => { box.querySelectorAll(`input[data-g="${a.dataset.all}"]`).forEach(b => b.checked = a.checked); a.indeterminate = false; count(); });
+  box.addEventListener("change", ev => { if (ev.target.dataset.g) syncAll(); count(); saveChecks(); });
   syncAll(); count();
   // 체크 상태 공유: 바꿀 때마다 시트('여론체크')에 저장, 열 때·화면으로 돌아올 때 불러옴 → 기기가 달라도 같은 체크
   const day = v => String(v || "").replace("at:", "").slice(0, 10);
@@ -384,6 +415,7 @@ async function reviewPanel(s, draft, live) {
   const RULE_AT = new Date("2026-11-16T07:30:00Z");   // 이 시각 전에 저장된 체크엔 자동 해제 규칙(CS·상업화 불만, 30일 지난 게시물)을 다시 적용
   const applyKeys = (keys, at) => {
     const on = new Set(keys), old = !at || new Date(at) < RULE_AT;
+    ["changes", "iq"].forEach(g => { if (on.has(g)) boxes().forEach(b => { if (b.dataset.k.startsWith(g + ":")) on.add(b.dataset.k); }); });   // 예전 '묶음 1개' 체크 → 낱개 전부
     boxes().forEach(b => {
       const k = b.dataset.k, sec = k.split(":")[0];
       b.checked = on.has(k) && sec !== "warns" && !(old && b.closest(".rv-it")?.querySelector(".rv-off"));
