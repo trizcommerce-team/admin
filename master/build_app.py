@@ -892,6 +892,68 @@ def parse_product(ws, colors, blk=None):
     }
 
 
+
+# ---------------------------------------------------------------- '1. 개요' 탭 (새 양식: 개요 / 콘텐츠 가이드 / 상품 정보)
+def parse_overview(sheets):
+    """'개요' 탭에서 제품 이름·공구 기간·판매 구성·이벤트·초안 공유 일정을 읽는다 (정산 내용은 앱에 넣지 않음)"""
+    ws = next((w for w in sheets if "개요" in w.title), None)
+    if ws is None:
+        return None
+    rows = []
+    for r in range(1, ws.max_row + 1):
+        cells = [(c, text(ws.cell(r, c).value)) for c in range(1, ws.max_column + 1)]
+        cells = [(c, v) for c, v in cells if v and not v.startswith("=")]
+        rows.append(cells)
+    title = next((v for cells in rows for _, v in cells[:1] if re.search(r"\S\s*[xX×]\s*\S", v)), "")
+    seller = CONFIG["seller"].removesuffix("님")
+    name = re.sub(rf"^.*?{re.escape(seller)}\s*님?\s*[xX×]\s*", "", title)
+    name = re.sub(r"\s*\d{4}\.\d{1,2}\s*$", "", name).strip()
+    out = {"name": name, "fullName": title, "period": None, "info": [], "share": []}
+    section, start, end = "", None, None
+    for cells in rows:
+        if not cells:
+            continue
+        head0 = cells[0][1].strip()
+        if (len(cells) == 1 and len(head0) <= 20 and not re.search(r"\d", head0)) or re.match(r"(판매 구성|피드 업로드 스케줄|정산 방식|진행 일정|이벤트$|콘텐츠 (업로드|공유))", head0):
+            section = head0
+            continue
+        lab = cells[0][1].strip()
+        rest = " · ".join(v.strip() for _, v in cells[1:])
+        if "정산" in section:
+            continue
+        if lab == "시작":
+            start = rest
+        elif lab == "종료":
+            end = rest
+        elif "판매 구성" in lab or lab in ("상품명", "진행 시점", "일정"):
+            continue
+        elif "이벤트" in section and cells:
+            out["info"].append({"label": "이벤트", "text": " · ".join(v.strip() for _, v in cells)})
+        elif "공유 일정" in section:
+            out["share"].append(" · ".join(v.strip() for _, v in cells))
+        elif "업로드" in section:
+            continue
+        elif re.match(r"(배송|제주)", lab):
+            out["info"].append({"label": "배송", "text": lab})
+        elif "판매 구성" in section and re.search(r"\d\s*EA", " ".join(v for _, v in cells)):
+            vals = [v.strip() for _, v in cells]
+            opt = next((v for v in vals if re.search(r"\d\s*EA", v)), "")
+            nums = [float(v) for v in vals if re.fullmatch(r"\d+(\.\d+)?", v)]
+            names = [v.replace("\n", " ") for v in vals if v != opt and not re.fullmatch(r"\d+(\.\d+)?", v)]
+            if names:
+                out["info"].append({"label": "제품", "text": names[0]})
+            won = [f"{int(n):,}원" for n in nums if n >= 1]
+            pct = next((f" ({round(n * 100)}% 할인)" for n in nums if 0 < n < 1), "")
+            line = f"{opt} · 정상가 {won[0]} → 공구가 {won[1]}{pct}" if len(won) >= 2 else " · ".join([opt] + won)
+            out["info"].append({"label": "판매 구성", "text": line})
+    if start and end:
+        out["period"] = parse_period(f"{start} ~ {end}") or parse_period(re.sub(r"\s+\d{1,2}:\d{2}", "", f"{start} ~ {end}"))
+        out["info"].insert(0, {"label": "공구 일정", "text": f"{start.strip()} ~ {end.strip()}"})
+    if out["share"]:
+        out["info"].append({"label": "초안 공유 일정", "text": "\n".join(out["share"])})
+    return out
+
+
 # ---------------------------------------------------------------- 월별 탭
 GRID_LABELS = {"스토리", "주제", "기획 의도", "팔로워 반응", "콘텐츠 구성", "콘텐츠 플로우", "캡션 참고",
                "콘텐츠", "기대 효과", "기획 의도 & 기대 효과", "팔로워 예상 반응", "피드 비주얼", "피드 참고"}
@@ -1216,6 +1278,14 @@ def main():
             p = by_id.get(e["product"])
             if p and not p["period"]:  # 제품 탭에 공구일정이 안 적혀 있으면 캘린더의 기간을 사용
                 p["period"] = [e["date"], e["end"]]
+    ov = parse_overview(sheets)  # 새 양식 시트: '1. 개요' 탭의 제품명·기간·판매 정보를 콘텐츠 가이드 탭 제품에 붙임
+    if ov:
+        for p in products:
+            if re.match(r"^\d+\.?\s*콘텐츠", p["name"]) or len(products) == 1:
+                p["name"] = ov["name"] or p["name"]
+                p["fullName"] = p["fullName"] or ov["fullName"]
+                p["period"] = p["period"] or ov["period"]
+                p["info"] = ov["info"] + p["info"]
     for p in products:
         order_info(p)
     scan_close_times(sheets, products, product_sheets)  # 공구 마감·결제창 마감 시각 (시트 어디에 적혀 있든)

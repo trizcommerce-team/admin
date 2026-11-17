@@ -560,8 +560,9 @@ const SELLERS = [
   {team:"C팀", name:"뽕커벨", repo:"paorang73",    c:"#C0392B"},
   {team:"C팀", name:"스미홈트", repo:"smitruti1010",c:"#2A9D8F"},
   {team:"C팀", name:"에나스쿨", repo:"shinyoung_h", c:"#8D6E63"},
+  {team:"신규", name:"해서영", repo:"hae.seoyoung", c:"#D4A373"},
 ];
-const TEAMS = ["전체", "A팀", "B팀", "C팀"];
+const TEAMS = ["전체", "A팀", "B팀", "C팀", "신규"];
 const DOW = ["일","월","화","수","목","금","토"];
 const $ = s => document.querySelector(s);
 const pad = n => String(n).padStart(2, "0");
@@ -1246,8 +1247,8 @@ window.__admin = {SELLERS, loadSeller, unlock, route};
 
 <script>
 // 항상 최신 화면: 서버 버전과 다르면(옛 화면이 남아 있으면) 저장해 둔 것을 지우고 새로 불러옴
-const APPVER = "baf766ba88";
-if ("serviceWorker" in navigator) navigator.serviceWorker.register(new URL("sw.js?v=baf766ba88", location.href).href).catch(() => {});
+const APPVER = "5de1fc33b7";
+if ("serviceWorker" in navigator) navigator.serviceWorker.register(new URL("sw.js?v=5de1fc33b7", location.href).href).catch(() => {});
 async function checkVer() {
   try {
     const v = (await (await fetch(new URL("version.txt?t=" + Date.now(), location.href).href, {cache: "no-store"})).text()).trim();
