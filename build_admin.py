@@ -41,6 +41,34 @@ pwa_head = f'''<link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" href="icon-192.png">
 <meta name="theme-color" content="#F6F1EA">
 '''
+
+# ---------------------------------------------------------------- 페이지 가리기 (2026-11-18 재열님 요청)
+AI_META = ('<meta name="robots" content="noindex,nofollow,noarchive,nosnippet,noimageindex,noai,noimageai">\n'
+           '<meta name="googlebot" content="noindex,nofollow,noarchive,nosnippet">\n')
+
+
+def cloak(html, cut="<style>"):
+    """cut 앞(메타·제목·아이콘)만 그대로 두고, 나머지(디자인·화면·코드·데이터)는 XOR+base64 로 감싸서
+    브라우저에서 열 때만 풀어 document.write 로 그린다. 링크만 읽는 AI·검색 로봇에는 의미 없는 글자만 보인다."""
+    import base64, os
+    i = html.find(cut, max(0, html.find("</title>")))   # 제목 뒤의 첫 <style> 부터 가림
+    if i < 0:
+        return html
+    head, body = html[:i], html[i:]
+    key = os.urandom(16)
+    raw = body.encode("utf-8")
+    enc = base64.b64encode(bytes(b ^ key[n % 16] for n, b in enumerate(raw))).decode()
+    k = base64.b64encode(key).decode()
+    loader = ('<script>(function(){var k=atob("%s"),b=atob("%s"),u=new Uint8Array(b.length);'
+              'for(var i=0;i<b.length;i++)u[i]=b.charCodeAt(i)^k.charCodeAt(i%%16);'
+              'document.write(new TextDecoder().decode(u));})();</script>' % (k, enc))
+    if 'name="robots"' in head:
+        head = head.split('<meta name="robots"')[0] + head.split('<meta name="robots"', 1)[1].split(">", 1)[1]
+    j = head.find("\n", head.find('<meta charset="utf-8">'))   # 문서 형식 선언·글자 설정 다음 줄에 AI 차단 표시
+    head = head[:j + 1] + AI_META + head[j + 1:]
+    return head + "<noscript>이 캘린더는 휴대폰 브라우저에서 열어 주세요.</noscript>\n" + loader
+
+
 html = "<!doctype html>\n<html lang=\"ko\">\n<head>\n" + head.replace("<title>", pwa_head + "<title>", 1) + "\n</head>\n<body>\n" + tpl_vars + body + install + f'''
 <script>
 // 항상 최신 화면: 서버 버전과 다르면(옛 화면이 남아 있으면) 저장해 둔 것을 지우고 새로 불러옴
@@ -64,7 +92,7 @@ setInterval(checkVer, 3 * 60 * 1000);   // 켜 둔 채로 있어도 3분마다 �
 </body>
 </html>
 '''
-(HERE / "index.html").write_text(html, encoding="utf-8")
+(HERE / "index.html").write_text(cloak(html), encoding="utf-8")
 for n in (180, 192, 512):
     (HERE / f"icon-{n}.png").write_bytes((HERE / f"icons/icon-{n}.png").read_bytes())
 manifest = {"id": "./", "name": "admin · 셀러 전체 캘린더", "short_name": "admin 캘린더", "lang": "ko",
