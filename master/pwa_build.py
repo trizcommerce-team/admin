@@ -146,6 +146,9 @@ def cloak(html, cut="<style>"):
     return head + "<noscript>이 캘린더는 휴대폰 브라우저에서 열어 주세요.</noscript>\n" + loader
 
 
+SHEET_RE = re.compile(r"https://docs\.google\.com/spreadsheets/d/[A-Za-z0-9_-]+[^\"'\s<]*")   # 원본 시트 주소
+
+
 def main():
     if PWA.exists():
         shutil.rmtree(PWA)
@@ -189,7 +192,7 @@ def main():
     digest = hashlib.sha256((json.dumps(data, ensure_ascii=False, sort_keys=True) + code).encode()).hexdigest()[:16]
     (PWA / "version.txt").write_text(digest, encoding="utf-8")
     # 화면이 자기 버전을 알고 있어야 새 버전이 올라왔는지 비교할 수 있음
-    (PWA / "index.html").write_text(cloak(html.replace("__APPVER__", digest)), encoding="utf-8")
+    (PWA / "index.html").write_text(cloak(SHEET_RE.sub("", html.replace("__APPVER__", digest))), encoding="utf-8")
     # 아이콘이 바뀌면 주소 끝(?v=)도 바뀌어서, 홈 화면에 설치된 앱(안드로이드 크롬)이 새 아이콘을 알아채고 스스로 바꾼다
     iv = hashlib.sha256((PWA / "icon-512.png").read_bytes()).hexdigest()[:8]
     manifest = {
