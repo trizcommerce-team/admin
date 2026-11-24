@@ -361,7 +361,7 @@ async function loadSeller(s) {
 // ---- 댓글 여론 검토: 항목마다 체크 → '최종 연동'을 누르면 체크한 것만 셀러 캘린더에 반영 ----
 const SEC_LABEL = {headline: "한눈에 보기", mood: "댓글 분위기", loves: "팔로워가 좋아하는 것", asks: "자주 묻는 질문", wants: "바라는 것",
   warns: "주의할 점", kinds: "반응 좋은 콘텐츠", who: "어떤 팔로워인지", flavors: "인기 맛", ideas: "콘텐츠 아이디어",
-  posts: "게시물별 요약", changes: "지난 기간 대비 달라진 여론", iq: "답을 기다리는 질문·소통"};
+  posts: "게시물별 요약", changes: "지난주 대비 달라진 여론", iq: "답을 기다리는 질문·소통"};
 function itemLabel(sec, it) {
   if (typeof it === "string") return it;
   if (it && it.lbl) return it.lbl;
@@ -403,7 +403,7 @@ async function reviewPanel(s, draft, live) {
   // 키: headline:0 (목록 항목), changes:new:0 / changes:deeper:1, iq:mood, iq:replies, iq:questions, iq:ex:3, flavors(묶음 통째)
   const pc = (a, b) => b ? Math.round(a / b * 100) : 0;
   const G = {}, add = (g, label, x) => { (G[g] = G[g] || {g, label, items: []}).items.push(x); };
-  const GL = {changes: "🆕 지난 기간 대비 달라진 여론", headline: "한눈에 보기", mood: "댓글 분위기", "iq-reply": "💬 답글 소통", "iq-q": "🙋 답을 기다리는 질문",
+  const GL = {changes: "🆕 지난주 대비 달라진 여론", headline: "한눈에 보기", mood: "댓글 분위기", "iq-reply": "💬 답글 소통", "iq-q": "🙋 답을 기다리는 질문",
     warns: "⚠️ 주의 신호", loves: "❤️ 팔로워가 좋아하는 점", asks: "❓ 자주 묻는 질문", wants: "🙋 팔로워 요청", kinds: "📊 콘텐츠 유형별 반응",
     who: "👥 어떤 팔로워인가요", ideas: "💡 일상 콘텐츠 힌트", posts: "🗂 게시물별 댓글 요약"};
   const ORDER = ["changes", "headline", "mood", "iq-reply", "iq-q", "warns", "loves", "asks", "wants", "kinds", "who", "flavors", "ideas", "posts"];
