@@ -795,7 +795,7 @@ const NEW = !IS_ADMIN ? null : (() => {
   new MutationObserver(later).observe(document.body, {childList: true, subtree: true});
   later();
   return {
-    k, entryKey, monthKey,
+    k, entryKey, monthKey, isNew,
     see(x, quiet) { if (!x || seen.has(x)) return; seen.add(x); save(); if (!quiet) later(); },
     ack(id) { (tabs[id] || []).forEach(x => ack.add(id + "|" + x)); save(); later(); },
   };
@@ -1058,11 +1058,17 @@ function ideaScore(it, ctx) {
 const IDEA_MAX = 8; // 일상 추천 탭에 한 번에 보여주는 주제 수
 function pickIdeas(k, avoid = [], n = IDEA_MAX) {
   const ctx = ideaCtx(k), picks = [], skip = [...avoid];
+  const off = Math.random() < 0.5 ? 0 : 1;   // admin: 새로 추가된(아직 안 연) 기획을 한 칸 걸러 섞어 넣음 — 기존 기획과 번갈아 보이게
   while (picks.length < n) {
     let got = 0;
     for (const g of GOAL_ORDER) {
       if (picks.length >= n) break;
-      const it = pickOne(g, ctx, skip);
+      let it = null;
+      if (NEW && (picks.length + off) % 2 === 0) {   // 새 기획 차례: 이 분류부터 돌며 새 기획을 하나만 고름
+        const gi = GOAL_ORDER.indexOf(g);
+        for (const x of [...GOAL_ORDER.slice(gi), ...GOAL_ORDER.slice(0, gi)]) if ((it = pickOne(x, ctx, skip, true))) break;
+      }
+      it ||= pickOne(g, ctx, skip);
       if (it) { picks.push(it); skip.push(it.t); got++; }
     }
     if (!got) break;
@@ -1070,9 +1076,12 @@ function pickIdeas(k, avoid = [], n = IDEA_MAX) {
   store.set(IDEA_SEEN_KEY, JSON.stringify([...ideaSeen].slice(-600)));
   return {ctx, picks};
 }
-function pickOne(g, ctx, avoid) {
+function pickOne(g, ctx, avoid, preferNew) {
   {
     let pool = IDEA_POOL.filter(it => it.g === g && !avoid.includes(it.t)).map(it => ({it, r: ideaScore(it, ctx)})).filter(x => x.r[0] > 0);
+    const nw = preferNew ? pool.filter(x => NEW.isNew(NEW.k.idea(x.it))) : [];
+    if (nw.length) { const hit = nw[Math.floor(Math.random() * nw.length)]; ideaSeen.add(hit.it.t); return {...hit.it, whyText: hit.it.why, why: hit.r[1]}; }
+    if (preferNew) return null;   // 이 분류엔 새 기획이 없음 → 다음 분류에서 찾음
     let fresh = pool.filter(x => !ideaSeen.has(x.it.t));
     if (!fresh.length) { // 이 목표의 주제를 다 봤으면 본 기록을 비우고 처음부터
       pool.forEach(x => ideaSeen.delete(x.it.t));
