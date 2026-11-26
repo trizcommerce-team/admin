@@ -474,7 +474,7 @@ details.fold,.op-card,.op-post,.op-hl li{border-radius:18px}
 
 /* 휴대폰 다크 모드와 상관없이 항상 설정한 디자인으로 보이게 */
 :root,:root[data-theme]{color-scheme:light only}
-/* admin 전용 NEW 표시 (이 기기에서 아직 확인 안 한 새·바뀐 콘텐츠) */
+/* NEW 표시 (이 기기에서 아직 확인 안 한 새·바뀐 콘텐츠) */
 .is-new{position:relative}
 .entry.is-new::after,.hero.is-new::after{content:"NEW";position:absolute;top:7px;right:10px;background:#E0352B;color:#fff;font-size:9.5px;font-weight:800;letter-spacing:.03em;line-height:1;padding:3px 5px;border-radius:6px}
 .tab.is-new::after{content:"NEW";margin-left:5px;background:#E0352B;color:#fff;font-size:9px;font-weight:800;line-height:1;padding:3px 4px;border-radius:5px}
@@ -735,10 +735,10 @@ DATA.months.filter(m => m.kind === "grid").forEach(m => m.days.forEach(d => {
 }));
 Object.values(byDate).forEach(l => l.sort((a, b) => a.sort - b.sort));
 
-/* ---------------- NEW 표시 (admin 전용) ----------------
+/* ---------------- NEW 표시 (admin·셀러 캘린더 공통) ----------------
    시트·초안이 바뀌어 새로 생기거나 내용이 바뀐 콘텐츠에 빨간 NEW. 콘텐츠마다 '내용 지문'을 만들어 이 기기(localStorage)에 본 것을 기록.
    콘텐츠를 열면 그 콘텐츠의 NEW가, 하단 탭을 누르면 그 탭의 NEW가 사라짐. 이 기기에서 처음 열 때는 지금 내용을 모두 '본 것'으로 시작. */
-const NEW = !IS_ADMIN ? null : (() => {
+const NEW = (() => {
   const hsh = o => { const s = JSON.stringify(o); let x = 5381; for (let i = 0; i < s.length; i++) x = ((x * 33) ^ s.charCodeAt(i)) >>> 0; return x.toString(36); };
   const memo = new WeakMap();   // 화면이 바뀔 때마다 다시 칠하므로 지문은 한 번만 계산 (월별 묶음은 첫 칸 객체 + 길이로 구분)
   const mk = (obj, tag, f) => { const m = memo.get(obj) || {}; if (!(tag in m)) { m[tag] = f(); memo.set(obj, m); } return m[tag]; };
@@ -762,7 +762,8 @@ const NEW = !IS_ADMIN ? null : (() => {
   };
   const all = new Set(Object.values(tabs).flat());
   const tabKeys = Object.entries(tabs).flatMap(([id, ks]) => ks.map(x => id + "|" + x));   // 탭 NEW 확인은 탭마다 따로
-  const SK = "admNew:" + (new URLSearchParams(location.search).get("s") || "");
+  // 기기별 기록. 모든 캘린더가 같은 사이트 주소를 쓰므로 셀러마다 따로: admin은 ?s=셀러, 셀러 캘린더는 주소 경로
+  const SK = IS_ADMIN ? "admNew:" + (new URLSearchParams(location.search).get("s") || "") : "newSeen:" + location.pathname;
   let st = null; try { st = JSON.parse(localStorage.getItem(SK)); } catch (e) {}
   const seen = new Set(st ? st.seen : all), ack = new Set(st ? st.ack : tabKeys), live = new Set(tabKeys);
   const save = () => { try { localStorage.setItem(SK, JSON.stringify({seen: [...seen].filter(x => all.has(x)), ack: [...ack].filter(x => live.has(x))})); } catch (e) {} };
@@ -1058,7 +1059,7 @@ function ideaScore(it, ctx) {
 const IDEA_MAX = 8; // 일상 추천 탭에 한 번에 보여주는 주제 수
 function pickIdeas(k, avoid = [], n = IDEA_MAX) {
   const ctx = ideaCtx(k), picks = [], skip = [...avoid];
-  const off = Math.random() < 0.5 ? 0 : 1;   // admin: 새로 추가된(아직 안 연) 기획을 한 칸 걸러 섞어 넣음 — 기존 기획과 번갈아 보이게
+  const off = Math.random() < 0.5 ? 0 : 1;   // 새로 추가된(아직 안 연) 기획을 한 칸 걸러 섞어 넣음 — 기존 기획과 번갈아 보이게
   while (picks.length < n) {
     let got = 0;
     for (const g of GOAL_ORDER) {
