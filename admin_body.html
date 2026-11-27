@@ -106,16 +106,16 @@
 <script>
 (function () {   // admin 화면 코드는 따로 감싸서, 같은 페이지에 그리는 셀러 화면 코드와 이름이 겹치지 않게
 const SELLERS = [
-  {team:"A팀", name:"방효선", repo:"imxux9",       c:"#E07A5F"},
-  {team:"A팀", name:"초아",   repo:"minjinchoa",   c:"#F2B134"},
-  {team:"A팀", name:"미자",   repo:"mija_uni",     c:"#81B29A"},
-  {team:"B팀", name:"베르베르", repo:"berberlog",  c:"#5B8DEF"},
-  {team:"B팀", name:"덕덕",   repo:"duckduck0613", c:"#9B6FD3"},
-  {team:"B팀", name:"한기솔", repo:"___solvely___",c:"#E86A9E"},
-  {team:"C팀", name:"뽕커벨", repo:"paorang73",    c:"#C0392B"},
-  {team:"C팀", name:"스미홈트", repo:"smitruti1010",c:"#2A9D8F"},
-  {team:"C팀", name:"에나스쿨", repo:"shinyoung_h", c:"#8D6E63"},
-  {team:"신규", name:"해서영", repo:"hae.seoyoung", c:"#D4A373"},
+  {team:"A팀", name:"방효선", repo:"imxux9", sheet:"1MTLBlWcl9DvJGwltiB1Ks1ugitJz8p6d7OcDlZ416WA",       c:"#E07A5F"},
+  {team:"A팀", name:"초아",   repo:"minjinchoa", sheet:"1pkUC-malhHyzcAuwONl7qSuz1MBHw1KbmEwUiw5Om6E",   c:"#F2B134"},
+  {team:"A팀", name:"미자",   repo:"mija_uni", sheet:"1ZV4B-kq0rGuX7CV_fc9FEBmkm68Zrg9e45VrQAkokqE",     c:"#81B29A"},
+  {team:"B팀", name:"베르베르", repo:"berberlog", sheet:"1OH20HJmS2L-s7qBhRH3VQcdOyyPchFYUDxum-N-h7AI",  c:"#5B8DEF"},
+  {team:"B팀", name:"덕덕",   repo:"duckduck0613", sheet:"1qb1TsBgDTvlX0qAFSXQfKi1uk1FTyyINzj1Tw2qriys", c:"#9B6FD3"},
+  {team:"B팀", name:"한기솔", repo:"___solvely___", sheet:"1cbP2TpBab5Bbr2QZxEl1foFFSbdeCXX4nmXkLOrLUMc",c:"#E86A9E"},
+  {team:"C팀", name:"뽕커벨", repo:"paorang73", sheet:"1H8IVRWx9Hy0cftcUSsxsTxV2YhhhJuCC_wipfe1Xl50",    c:"#C0392B"},
+  {team:"C팀", name:"스미홈트", repo:"smitruti1010", sheet:"1ooVGVTIk8s3XOWKbto-AyByLryrcpVpRhhXeRNgDOYs",c:"#2A9D8F"},
+  {team:"C팀", name:"에나스쿨", repo:"shinyoung_h", sheet:"16IOaMz2BN3FVEmW6yxOF4-9bvQQ8u5G7awETjp9W64k", c:"#8D6E63"},
+  {team:"신규", name:"해서영", repo:"hae.seoyoung", sheet:"1qiX7x_f0iak5HMoPyU8ZXZhMi9d1zMoKBx3zeds1zQM", c:"#D4A373"},
 ];
 const TEAMS = ["전체", "A팀", "B팀", "C팀", "신규"];
 const DOW = ["일","월","화","수","목","금","토"];
@@ -339,6 +339,7 @@ async function loadSeller(s) {
   const [cfg, data, ideas, liveOpinion, draft] = await Promise.all([get("config.json"), get("data.json"), get("ideas.json"), get("opinion.json"), getDraft()]);
   const opinion = draft || liveOpinion;
   if (!data) { ui.innerHTML = `<div style="padding:40px 20px;text-align:center;color:var(--muted)">${esc(s.name)}님 캘린더를 불러오지 못했어요. <a href="./">전체 보기로</a></div>`; return; }
+  data.sheetUrl = `https://docs.google.com/spreadsheets/d/${s.sheet}/edit`;   // 셀러 사이트 data.json 엔 시트 주소가 지워져 있어서 admin 에서만 채움
   window.__ADM = {data, ideas, opinion};
   const seller = (cfg && cfg.seller) || (s.name + "님");
   const fill = x => x.split("__SELLER__").join(seller).split("__APP_NAME__").join((cfg && cfg.app_name) || seller + " 콘텐츠 캘린더").split("__UPCOMING__").join(String((cfg && cfg.upcoming_days) || 3));
